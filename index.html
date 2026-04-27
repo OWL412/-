@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+    
+<title>文化祭レジ</title>
+
+<style>
+body { font-family: sans-serif; text-align: center; }
+
+.container {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+}
+
+.products {
+  display: grid;
+  grid-template-columns: repeat(2, 200px);
+  gap: 15px;
+}
+
+.item {
+  border: 2px solid #ccc;
+  padding: 10px;
+  border-radius: 10px;
+}
+
+button {
+  font-size: 18px;
+  padding: 10px;
+  margin: 5px;
+  border: none;
+  border-radius: 8px;
+}
+
+.plus { background: #4CAF50; color: white; }
+.minus { background: #f44336; color: white; }
+.checkout { background: #2196F3; color: white; font-size: 22px; padding: 15px 30px; }
+
+.cart {
+  border-left: 3px solid #ccc;
+  padding-left: 20px;
+  min-width: 200px;
+}
+
+#total {
+  font-size: 28px;
+  margin: 20px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>文化祭レジ</h1>
+
+<div class="container">
+
+<div class="products">
+
+<div class="item">
+焼きそば<br>300円<br>
+<button class="plus" onclick="addItem('焼きそば',300)">＋</button>
+<button class="minus" onclick="removeItem('焼きそば',300)">−</button>
+<div id="count-焼きそば">0個</div>
+</div>
+
+<div class="item">
+ジュース<br>150円<br>
+<button class="plus" onclick="addItem('ジュース',150)">＋</button>
+<button class="minus" onclick="removeItem('ジュース',150)">−</button>
+<div id="count-ジュース">0個</div>
+</div>
+
+<div class="item">
+ねこ<br>300円<br>
+<button class="plus" onclick="addItem('ねこ',300)">＋</button>
+<button class="minus" onclick="removeItem('ねこ',300)">−</button>
+<div id="count-ねこ">0個</div>
+</div>
+
+</div>
+
+<div class="cart">
+<h3>カート</h3>
+<ul id="cartList"></ul>
+</div>
+
+</div>
+
+<h2 id="total">合計：0円</h2>
+
+<button class="checkout" onclick="checkout()">会計</button>
+<br><br>
+<button onclick="downloadCSV()">CSVダウンロード</button>
+
+<!-- 🔥 追加：安全削除 -->
+<button onclick="confirmReset()" style="background:red;color:white;">
+  全データ削除
+</button>
+
+<script>
+let cart = [];
+let total = 0;
+
+// 復元
+window.onload = function(){
+  cart = JSON.parse(localStorage.getItem("cart") || "[]");
+  total = parseInt(localStorage.getItem("total") || "0");
+  updateCart();
+};
+
+// 保存
+function saveCart(){
+  localStorage.setItem("cart", JSON.stringify(cart));
+  localStorage.setItem("total", total);
+}
+
+// 更新
+function updateCart(){
+  const list = document.getElementById("cartList");
+  list.innerHTML = "";
+
+  let countMap = {};
+
+  cart.forEach(item => {
+    countMap[item.name] = (countMap[item.name] || 0) + 1;
+  });
+
+  document.querySelectorAll("[id^='count-']").forEach(e => e.innerText = "0個");
+
+  Object.entries(countMap).forEach(([name, count]) => {
+    const li = document.createElement("li");
+    li.textContent = `${name} ×${count}`;
+    list.appendChild(li);
+
+    const el = document.getElementById("count-" + name);
+    if(el) el.innerText = count + "個";
+  });
+
+  document.getElementById("total").innerText = "合計：" + total + "円";
+}
+
+// ＋
+function addItem(name, price){
+  cart.push({name, price});
+  total += price;
+  updateCart();
+  saveCart();
+}
+
+// −
+function removeItem(name, price){
+  const index = cart.findIndex(item => item.name === name);
+  if(index === -1) return;
+
+  cart.splice(index, 1);
+  total -= price;
+  updateCart();
+  saveCart();
+}
+
+// 会計
+function checkout(){
+  if(cart.length === 0){
+    alert("商品がありません");
+    return;
+  }
+
+  const now = new Date();
+
+  let countMap = {};
+  cart.forEach(item => {
+    countMap[item.name] = (countMap[item.name] || 0) + 1;
+  });
+
+  const itemsText = Object.entries(countMap)
+    .map(([name, count]) => `${name}×${count}`)
+    .join(" / ");
+
+  let sales = JSON.parse(localStorage.getItem("sales") || "[]");
+
+  sales.push({
+    time: now.toLocaleString(),
+    items: itemsText,
+    total: total
+  });
+
+  localStorage.setItem("sales", JSON.stringify(sales));
+
+  localStorage.removeItem("cart");
+  localStorage.removeItem("total");
+
+  alert("会計：" + total + "円");
+
+  cart = [];
+  total = 0;
+  updateCart();
+}
+
+// CSV
+function downloadCSV(){
+  let sales = JSON.parse(localStorage.getItem("sales") || "[]");
+
+  if(sales.length === 0){
+    alert("データがありません");
+    return;
+  }
+
+  let csv = "日時,商品,合計\n";
+
+  sales.forEach(r => {
+    csv += `"${r.time}","${r.items}","${r.total}"\n`;
+  });
+
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "sales.csv";
+  a.click();
+
+  URL.revokeObjectURL(url);
+}
+
+// 🔥 安全削除（フールプルーフ）
+function confirmReset(){
+  const input = prompt("削除するには『DELETE』と入力してください");
+
+  if(input !== "DELETE"){
+    alert("キャンセルしました");
+    return;
+  }
+
+  if(!confirm("本当にすべてのデータを削除しますか？")){
+    return;
+  }
+
+  localStorage.removeItem("sales");
+  localStorage.removeItem("cart");
+  localStorage.removeItem("total");
+
+  cart = [];
+  total = 0;
+  updateCart();
+
+  alert("すべてのデータを削除しました");
+}
+</script>
+
+</body>
+</html>
